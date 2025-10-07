@@ -1,0 +1,19 @@
+{
+  "android": {
+    "release": {
+      "keystore": "package.keystore",
+      "storePassword": "7w88JFes",
+      "alias": "h5e39b7b9",
+      "password": "7w88JFes",
+      "keystoreType": "pkcs12",
+      "packageType": "bundle"
+    }
+  }
+}
+
+
+
+
+
+
+

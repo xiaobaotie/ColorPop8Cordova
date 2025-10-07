@@ -1,0 +1,58 @@
+<?xml version='1.0' encoding='utf-8'?>
+    <widget id="colorpop8.text" version="0.0.1.18" android-versionCode="2025100402" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+    <name>Color Pop 8</name>
+    <description>经典方块拼图游戏，挑战你的逻辑思维和空间想象力</description>
+    <author email="" href="">
+        Listening Studio
+    </author>
+    <content src="index.html" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    
+    <!-- 应用图标 - 多尺寸支持 -->
+    <icon src="www/img/72x72.png" width="72" height="72" density="hdpi" />
+    <icon src="www/img/96x96.png" width="96" height="96" density="xhdpi" />
+    <icon src="www/img/144x144.png" width="144" height="144" density="xxhdpi" />
+    <icon src="www/img/192x192.png" width="192" height="192" density="xxxhdpi" />
+    
+    <!-- 启动屏幕 -->
+    <splash src="www/img/icon4.png" />
+    
+    <platform name="android">
+        <preference name="AndroidXEnabled" value="true" />
+        <preference name="AndroidInsecureFileModeEnabled" value="true" />
+        <preference name="AndroidWindowSplashScreenShow" value="false" />
+        <preference name="AndroidPersistentFileLocation" value="Compatibility" />
+        <preference name="AndroidExtraFilesystems" value="files,files-external,documents,sdcard,cache,cache-external,assets" />
+        
+        <!-- 高分辨率支持 -->
+        <preference name="EnableViewportScale" value="true" />
+        <preference name="MediaPlaybackRequiresUserAction" value="false" />
+        <preference name="SuppressesIncrementalRendering" value="false" />
+        <preference name="UIWebViewBounce" value="false" />
+        <preference name="BackupWebStorage" value="none" />
+        <preference name="KeyboardDisplayRequiresUserAction" value="true" />
+        
+        <!-- 16KB页面支持 -->
+        <preference name="AndroidExtractNativeLibs" value="false" />
+        <preference name="android-targetSdkVersion" value="35" />
+        <preference name="android-minSdkVersion" value="21" />
+        <preference name="android-compileSdkVersion" value="35" />
+        <preference name="android-buildToolsVersion" value="35.0.0" />
+        <preference name="GradleVersion" value="8.13" />
+        <preference name="AndroidGradlePluginVersion" value="8.3.2" />
+        
+        <!-- 权限配置 -->
+        <preference name="AndroidLargeHeap" value="true" />
+        <preference name="AndroidHardwareAccelerated" value="true" />
+        <preference name="AndroidUsesCleartextTraffic" value="true" />
+        
+        <!-- 方向锁定 -->
+        <preference name="Orientation" value="portrait" />
+
+        <!-- 声明广告ID权限（与Play后台声明一致） -->
+        <edit-config file="app/src/main/AndroidManifest.xml" mode="merge" target="/manifest">
+            <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+        </edit-config>
+    </platform>
+</widget>

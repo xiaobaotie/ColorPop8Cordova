@@ -1,0 +1,24 @@
+files:
+  - time: 1670900940993.yml
+    name: WallessPKU.yaml
+    url: https://wallesspku.space/clash/1900012186@pku.edu.cn/bp3r6dd93a
+    selected:
+      - name: GLOBAL
+        now: 🧱 GFW
+      - name: 🔔 Info
+        now: wku.org/u
+      - name: 🧱 GFW
+        now: 🇺🇸 US-A
+      - name: 🚀 Accel.
+        now: DIRECT
+    interval: 0
+    subInfo:
+      upload: 0
+      download: 388220496
+      total: 21474836480
+      expire: 1759334400
+    homeWeb: ""
+    mode: rule
+    cron: ""
+    headers: ""
+index: 0

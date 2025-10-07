@@ -1,0 +1,32 @@
+{
+  "name": "com.yourcomp.colorpop8",
+  "displayName": "ColorPop8",
+  "version": "1.0.0",
+  "description": "A sample Apache Cordova application that responds to the deviceready event.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ecosystem:cordova"
+  ],
+  "author": "Apache Cordova Team",
+  "license": "Apache-2.0",
+  "cordova": {
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "plugins": {
+      "admob-plus-cordova": {
+        "APP_ID_ANDROID": "ca-app-pub-3940256099942544~3347511713",
+        "PLAY_SERVICES_VERSION": "22.6.0"
+      }
+    }
+  },
+  "devDependencies": {
+    "admob-plus-cordova": "^1.28.0",
+    "cordova-android": "^12.0.1",
+    "cordova-ios": "^7.1.1"
+  }
+}
