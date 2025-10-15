@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Block Blast</title>
     <script type="text/javascript" src="cordova.js"></script>
     <style>
@@ -4461,7 +4461,7 @@
         
         // 拿起块时"呼"的风声
         
-        // 广告系统初始化 - 兼容“脚本在deviceready之后才加载”的情况
+        // 广告系统初始化 - 兼容"脚本在deviceready之后才加载"的情况
         (function() {
             let inited = false;
             async function initAd() {
@@ -4496,6 +4496,16 @@
                 setTimeout(initAd, 0);
             }
         })();
+
+        document.addEventListener('deviceready', function () {
+            if (window.StatusBar && typeof StatusBar.overlaysWebView === 'function') {
+                try { StatusBar.overlaysWebView(true); } catch (e) {}
+            }
+            if (window.StatusBar && typeof StatusBar.styleLightContent === 'function') {
+                try { StatusBar.styleLightContent(); } catch (e) {}
+            }
+        }, { once: true });
+        // 如果此脚本在 deviceready 之后才注入，补偿一次
     </script>
     
     <!-- 广告脚本：已内联初始化，移除外部脚本以避免冲突（admob v1） -->
