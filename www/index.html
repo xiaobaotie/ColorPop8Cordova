@@ -818,6 +818,37 @@
     </div>
 
     <script>
+        // ATT 权限请求（仅 iOS 生效）
+        function requestATTrackingPermission() {
+            // 检查是否在 iOS 平台
+            if (window.device && window.device.platform === 'iOS') {
+                // 检查 iOS 版本是否支持 ATT
+                if (window.device.version && parseFloat(window.device.version) >= 14.5) {
+                    // 请求 ATT 权限
+                    if (typeof window.requestTrackingPermission === 'function') {
+                        window.requestTrackingPermission().then(function(status) {
+                            console.log('ATT Permission Status:', status);
+                            // 权限请求完成后初始化 AdMob
+                            initAd();
+                        }).catch(function(error) {
+                            console.log('ATT Permission Error:', error);
+                            // 即使失败也初始化 AdMob
+                            initAd();
+                        });
+                    } else {
+                        // 如果不支持 ATT，直接初始化 AdMob
+                        initAd();
+                    }
+                } else {
+                    // iOS 版本太低，直接初始化 AdMob
+                    initAd();
+                }
+            } else {
+                // 非 iOS 平台，直接初始化 AdMob
+                initAd();
+            }
+        }
+
         // 轻量级广告调试叠层（无需 logcat）。发布前可将 AD_DEBUG_ENABLED 设为 false。
         const AD_DEBUG_ENABLED = false;
         function adDbg(message, isError) {
@@ -4490,10 +4521,10 @@
                     scheduleBannerShow();
                 }
             }
-            document.addEventListener('deviceready', initAd, { once: true });
+            document.addEventListener('deviceready', requestATTrackingPermission, { once: true });
             // 如果此脚本在 deviceready 之后才注入，补偿一次
             if (window.cordova && window.cordova.platformId && document.readyState === 'complete') {
-                setTimeout(initAd, 0);
+                setTimeout(requestATTrackingPermission, 0);
             }
         })();
 
