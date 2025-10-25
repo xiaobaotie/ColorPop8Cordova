@@ -1,0 +1,8 @@
+/* 初始全屏启动图（不依赖插件） */
+.boot-splash {
+  background: #000 url('../img/1125x2436.png') center center / cover no-repeat fixed;
+}
+
+
+
+

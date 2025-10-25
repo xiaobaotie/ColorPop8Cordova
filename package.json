@@ -14,23 +14,27 @@
   "license": "Apache-2.0",
   "cordova": {
     "platforms": [
-      "android",
-      "ios"
+      "ios",
+      "android"
     ],
     "plugins": {
+      "cordova-plugin-statusbar": {},
+      "cordova-plugin-splashscreen": {},
       "admob-plus-cordova": {
-        "APP_ID_IOS": "ca-app-pub-7061618651809737~6156091332",
-        "APP_ID_ANDROID": "ca-app-pub-3940256099942544~3347511713",
+        "APP_ID_ANDROID": "ca-app-pub-7061618651809737~6156091332",
+        "PLAY_SERVICES_VERSION": "22.6.0",
+        "PACKAGE_NAME": "colorpop8.text",
+        "APP_ID_IOS": "ca-app-pub-xxx~yyy",
         "USAGE": "This identifier will be used to deliver personalized ads to you.",
         "DISABLESDKCRASHREPORTING": "false"
-      },
-      "cordova-plugin-statusbar": {}
+      }
     }
   },
   "devDependencies": {
     "admob-plus-cordova": "^2.0.0-alpha.19",
     "cordova-android": "^12.0.1",
     "cordova-ios": "^7.1.1",
+    "cordova-plugin-splashscreen": "^6.0.2",
     "cordova-plugin-statusbar": "^4.0.0"
   }
 }

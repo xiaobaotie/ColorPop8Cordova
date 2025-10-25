@@ -4,7 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Block Blast</title>
-    <script type="text/javascript" src="cordova.js"></script>
+<script type="text/javascript" src="cordova.js"></script>
+<script>
+  document.addEventListener('deviceready', function () {
+    // Cordova 环境：设备就绪后移除假启动图背景
+    try { document.body.classList.remove('boot-splash'); } catch(_) {}
+    if (window.navigator && navigator.splashscreen && typeof navigator.splashscreen.hide === 'function') {
+      try { navigator.splashscreen.hide(); } catch (e) {}
+    }
+  });
+  // 浏览器调试/非 Cordova 环境兜底：DOMContentLoaded 后移除假启动图
+  document.addEventListener('DOMContentLoaded', function () {
+    try {
+      if (!window.cordova && document.body && document.body.classList.contains('boot-splash')) {
+        document.body.classList.remove('boot-splash');
+      }
+    } catch(_) {}
+  });
+</script>
+    <link rel="stylesheet" href="css/boot-splash.css" />
     <style>
         body {
             margin: 0;
@@ -720,7 +738,7 @@
         }
     </style>
 </head>
-<body>
+<body class="boot-splash">
     <audio id="eliminate-audio" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae5c7.mp3" preload="auto"></audio>
     <audio id="voice-nice" src="audio/nice.mp3" preload="auto"></audio>
     <audio id="voice-amazing" src="audio/amazing.mp3" preload="auto"></audio>
@@ -1861,6 +1879,520 @@
                 return this.activeColors[Math.floor(Math.random() * this.activeColors.length)];
             }
 
+            // ============ 边数出块：辅助与重染色（不改变 this.grid） ============
+            computeInternalEdgeCountOnGrid(grid) {
+                try {
+                    if (!Array.isArray(grid)) return 0;
+                    let edges = 0;
+                    const N = this.gridSize;
+                    for (let r = 0; r < N; r++) {
+                        for (let c = 0; c < N - 1; c++) {
+                            const a = grid[r][c] > 0;
+                            const b = grid[r][c + 1] > 0;
+                            if (a !== b) edges++;
+                        }
+                    }
+                    for (let r = 0; r < N - 1; r++) {
+                        for (let c = 0; c < N; c++) {
+                            const a = grid[r][c] > 0;
+                            const b = grid[r + 1][c] > 0;
+                            if (a !== b) edges++;
+                        }
+                    }
+                    return edges;
+                } catch (_) { return 0; }
+            }
+
+            placePatternOnGridRaw(grid, pattern, startRow, startCol) {
+                const newGrid = grid.map(row => row.slice());
+                for (let r = 0; r < pattern.length; r++) {
+                    for (let c = 0; c < pattern[r].length; c++) {
+                        if (pattern[r][c]) newGrid[startRow + r][startCol + c] = 1;
+                    }
+                }
+                return newGrid;
+            }
+
+            getPatternArea(pattern) {
+                let n = 0;
+                for (let r = 0; r < pattern.length; r++) {
+                    for (let c = 0; c < pattern[r].length; c++) {
+                        if (pattern[r][c]) n++;
+                    }
+                }
+                return n;
+            }
+
+            sortShapesByCappedAreaDescWithTieShuffle(shapes) {
+                try {
+                    const buckets = { 5: [], 4: [], 3: [], 2: [], 1: [] };
+                    for (const pattern of shapes) {
+                        const area = this.getPatternArea(pattern);
+                        const cap = Math.min(5, Math.max(1, area));
+                        buckets[cap].push(pattern);
+                    }
+                    const out = [];
+                    const caps = [5,4,3,2,1];
+                    for (const k of caps) {
+                        const arr = buckets[k];
+                        if (arr.length) this.shuffleArray(arr);
+                        out.push(...arr);
+                    }
+                    return out;
+                } catch (_) {
+                    return shapes.slice();
+                }
+            }
+
+            computeBestPlacementForGridWithBaseline(grid, shapePool, baselineEdge) {
+                let best = null;
+                let currentBaseline = baselineEdge;
+                let foundAnyDecrease = false;
+                for (const pattern of shapePool) {
+                    const positions = this.findAllValidPositions(grid, pattern);
+                    if (!positions || positions.length === 0) continue;
+                    for (const {row, col} of positions) {
+                        const g1 = this.placePatternOnGridRaw(grid, pattern, row, col);
+                        const edge = this.computeInternalEdgeCountOnGrid(g1);
+                        if (edge < currentBaseline) {
+                            best = { pattern, row, col, edgeCount: edge, gridAfter: g1 };
+                            currentBaseline = edge;
+                            foundAnyDecrease = true;
+                        }
+                    }
+                }
+                return foundAnyDecrease ? best : null;
+            }
+
+            // 判断给定块池中，是否存在至少一个可在 grid 上放置的位置
+            existsPlaceablePlacement(grid, shapePool) {
+                try {
+                    for (const pattern of shapePool) {
+                        const positions = this.findAllValidPositions(grid, pattern);
+                        if (positions && positions.length) return true;
+                    }
+                    return false;
+                } catch(_) { return false; }
+            }
+
+            computeBestThreeShapesIgnoringColors() {
+                try {
+                    const results = [];
+                    let workGrid = this.grid.map(row => row.slice());
+                    // 默认过滤掉 1x1；若在当前盘面完全不可放，则回退包含 1x1
+                    const shapesAll = this.shapes.slice();
+                    const poolNo11 = shapesAll.filter(p => this.getPatternArea(p) !== 1);
+                    const candidatePool = this.existsPlaceablePlacement(workGrid, poolNo11) ? poolNo11 : shapesAll;
+                    const pool = this.sortShapesByCappedAreaDescWithTieShuffle(candidatePool);
+                    for (let i = 0; i < 3; i++) {
+                        const baseline = this.computeInternalEdgeCountOnGrid(workGrid);
+                        const pick = this.computeBestPlacementForGridWithBaseline(workGrid, pool, baseline);
+                        if (!pick) break;
+                        results.push({ pattern: pick.pattern, position: { row: pick.row, col: pick.col }, edgeCount: pick.edgeCount });
+                        workGrid = pick.gridAfter;
+                    }
+                    const out = results.slice();
+                    this.shuffleArray(out);
+                    return out;
+                } catch (_) { return []; }
+            }
+
+            // 计算某个位置的相邻同色数量（4邻域）
+            countAdjacentSameColor(grid, row, col, color) {
+                let cnt = 0;
+                const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+                for (const [dr, dc] of dirs) {
+                    const r = row + dr, c = col + dc;
+                    if (r >= 0 && r < this.gridSize && c >= 0 && c < this.gridSize) {
+                        if (grid[r][c] === color) cnt++;
+                    }
+                }
+                return cnt;
+            }
+
+            // 基于“相邻同色最多”重分配颜色：
+            // - baseColors 先给出一组颜色（包含重复），形成颜色袋 bag
+            // - 逐格扫描 pattern，把该格放到 (startRow,startCol) 时，从 bag 中挑使相邻同色最多的颜色；并从 bag 扣除一个
+            // - 同分随机
+            recolorPatternByAdjacency(pattern, baseColors, grid, startRow, startCol) {
+                const rows = pattern.length, cols = pattern[0].length;
+                const out = Array.from({ length: rows }, () => Array(cols).fill(0));
+                // 颜色袋（多重集）
+                const bag = [];
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const v = baseColors[r][c];
+                        if (pattern[r][c] && v > 0) bag.push(v);
+                    }
+                }
+                // 工作网格：随赋色实时写入，供后续格子参考
+                let sim = grid.map(row => row.slice());
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        if (!pattern[r][c]) continue;
+                        if (bag.length === 0) { out[r][c] = 0; continue; }
+                        // 为该格评估每个候选颜色
+                        const posR = startRow + r, posC = startCol + c;
+                        // 收集去重的候选色
+                        const uniq = Array.from(new Set(bag));
+                        let best = [];
+                        let bestScore = -1;
+                        for (const color of uniq) {
+                            const score = this.countAdjacentSameColor(sim, posR, posC, color);
+                            if (score > bestScore) { bestScore = score; best = [color]; }
+                            else if (score === bestScore) { best.push(color); }
+                        }
+                        // 同分随机
+                        const pick = best[Math.floor(Math.random() * best.length)];
+                        out[r][c] = pick;
+                        sim[posR][posC] = pick;
+                        // 从袋中移除一次 pick
+                        const idx = bag.indexOf(pick);
+                        if (idx >= 0) bag.splice(idx, 1);
+                    }
+                }
+                return out;
+            }
+
+            // 使用含 1x1 块池的随机可放（作为次兜底）
+            computeRandomPlaceableThreeWithColorsAllow11() {
+                const attempt = (pool) => {
+                    let found = false;
+                    let tryCount = 0;
+                    const maxTries = 100;
+                    let lastRandomShapes = [];
+                    let selectedShapes = [];
+                    while (!found && tryCount < maxTries) {
+                        tryCount++;
+                        let tempGrid = this.grid.map(row => row.slice());
+                        const shapePool = pool.slice();
+                        this.shuffleArray(shapePool);
+                        selectedShapes = [];
+                        lastRandomShapes = [];
+                        for (let i = 0; i < shapePool.length && selectedShapes.length < 3; i++) {
+                            const pattern = shapePool[i];
+                            const blockIndex = selectedShapes.length;
+                            const rawPool = this.shapeColorPools[blockIndex];
+                            const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                            const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                            let cellCount = 0; for (let rr = 0; rr < pattern.length; rr++) { for (let cc = 0; cc < pattern[rr].length; cc++) { if (pattern[rr][cc]) cellCount++; } }
+                            const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && cellCount >= 2)
+                                ? this.buildTwoColorMatrix(pattern, colorPool)
+                                : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                            const maxRow = this.gridSize - pattern.length;
+                            const maxCol = this.gridSize - pattern[0].length;
+                            const positions = this.getShuffledPositions(maxRow, maxCol);
+                            let placed = false;
+                            for (const pos of positions) {
+                                let canPlace = true;
+                                for (let r = 0; r < pattern.length; r++) {
+                                    for (let c = 0; c < pattern[r].length; c++) {
+                                        if (pattern[r][c] && tempGrid[pos.row + r][pos.col + c]) { canPlace = false; break; }
+                                    }
+                                    if (!canPlace) break;
+                                }
+                                if (canPlace) {
+                                    tempGrid = this.placeShapeOnGrid(tempGrid, pattern, colors, pos.row, pos.col);
+                                    selectedShapes.push({pattern, colors});
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                            lastRandomShapes.push({ pattern, colors });
+                        }
+                        if (selectedShapes.length === 3) { found = true; }
+                    }
+                    return { found, selectedShapes, lastRandomShapes };
+                };
+                const allShapes = this.shapes.slice();
+                let { found, selectedShapes, lastRandomShapes } = attempt(allShapes);
+                const out = [];
+                for (let i = 0; i < selectedShapes.length && i < 3; i++) {
+                    out.push({ pattern: selectedShapes[i].pattern, colors: selectedShapes[i].colors });
+                }
+                while (out.length < 3) {
+                    let randomShape;
+                    if (lastRandomShapes.length > 0) randomShape = lastRandomShapes[Math.floor(Math.random() * lastRandomShapes.length)];
+                    else {
+                        const pattern = this.shapes[0];
+                        const blockIndex = out.length;
+                        const rawPool = this.shapeColorPools[blockIndex];
+                        const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                        const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                        let __cells = 0; for (let r2 = 0; r2 < pattern.length; r2++) { for (let c2 = 0; c2 < pattern[r2].length; c2++) { if (pattern[r2][c2]) __cells++; } }
+                        const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && __cells >= 2)
+                            ? this.buildTwoColorMatrix(pattern, colorPool)
+                            : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                        randomShape = { pattern, colors };
+                    }
+                    out.push({ pattern: randomShape.pattern, colors: randomShape.colors });
+                }
+                return out;
+            }
+            // ============ 边数出块：辅助函数（不改变 this.grid） ============
+            // 计算给定 grid 的内部边数（盘面内一实一空的共享边）
+            computeInternalEdgeCountOnGrid(grid) {
+                try {
+                    if (!Array.isArray(grid)) return 0;
+                    let edges = 0;
+                    const N = this.gridSize;
+                    for (let r = 0; r < N; r++) {
+                        for (let c = 0; c < N - 1; c++) {
+                            const a = grid[r][c] > 0;
+                            const b = grid[r][c + 1] > 0;
+                            if (a !== b) edges++;
+                        }
+                    }
+                    for (let r = 0; r < N - 1; r++) {
+                        for (let c = 0; c < N; c++) {
+                            const a = grid[r][c] > 0;
+                            const b = grid[r + 1][c] > 0;
+                            if (a !== b) edges++;
+                        }
+                    }
+                    return edges;
+                } catch (_) { return 0; }
+            }
+
+            // 在指定 grid 上放置 pattern（仅置为1），返回新grid（不处理消除/颜色）
+            placePatternOnGridRaw(grid, pattern, startRow, startCol) {
+                const newGrid = grid.map(row => row.slice());
+                for (let r = 0; r < pattern.length; r++) {
+                    for (let c = 0; c < pattern[r].length; c++) {
+                        if (pattern[r][c]) newGrid[startRow + r][startCol + c] = 1;
+                    }
+                }
+                return newGrid;
+            }
+
+            // 计算形状面积（1 的数量）
+            getPatternArea(pattern) {
+                let n = 0;
+                for (let r = 0; r < pattern.length; r++) {
+                    for (let c = 0; c < pattern[r].length; c++) {
+                        if (pattern[r][c]) n++;
+                    }
+                }
+                return n;
+            }
+
+            // 按面积从大到小排序（面积≥5统一视为5），同面积随机
+            sortShapesByCappedAreaDescWithTieShuffle(shapes) {
+                try {
+                    const buckets = { 5: [], 4: [], 3: [], 2: [], 1: [] };
+                    for (const pattern of shapes) {
+                        const area = this.getPatternArea(pattern);
+                        const cap = Math.min(5, Math.max(1, area));
+                        buckets[cap].push(pattern);
+                    }
+                    const out = [];
+                    const caps = [5,4,3,2,1];
+                    for (const k of caps) {
+                        const arr = buckets[k];
+                        if (arr.length) this.shuffleArray(arr);
+                        out.push(...arr);
+                    }
+                    return out;
+                } catch (_) {
+                    return shapes.slice();
+                }
+            }
+
+            // 按“基边数严格递减”选择单块（若无任何 edge < baseline 的候选，返回 null）
+            computeBestPlacementForGridWithBaseline(grid, shapePool, baselineEdge) {
+                let best = null;
+                let currentBaseline = baselineEdge;
+                let foundAnyDecrease = false;
+                for (const pattern of shapePool) {
+                    const positions = this.findAllValidPositions(grid, pattern);
+                    if (!positions || positions.length === 0) continue;
+                    for (const {row, col} of positions) {
+                        const g1 = this.placePatternOnGridRaw(grid, pattern, row, col);
+                        const edge = this.computeInternalEdgeCountOnGrid(g1);
+                        if (edge < currentBaseline) {
+                            best = { pattern, row, col, edgeCount: edge, gridAfter: g1 };
+                            currentBaseline = edge;
+                            foundAnyDecrease = true;
+                        }
+                    }
+                }
+                return foundAnyDecrease ? best : null;
+            }
+
+            // 依据“最小边数+严格递减”策略迭代选择三块（忽略颜色，不处理消除）
+            computeBestThreeShapesIgnoringColors() {
+                try {
+                    const results = [];
+                    let workGrid = this.grid.map(row => row.slice());
+                    // 使用不含 1x1 的块池；不做额外可放判定
+                    const poolNo11 = this.shapes.slice().filter(p => this.getPatternArea(p) !== 1);
+                    const pool = this.sortShapesByCappedAreaDescWithTieShuffle(poolNo11);
+                    for (let i = 0; i < 3; i++) {
+                        const baseline = this.computeInternalEdgeCountOnGrid(workGrid);
+                        const pick = this.computeBestPlacementForGridWithBaseline(workGrid, pool, baseline);
+                        if (!pick) break;
+                        results.push({ pattern: pick.pattern, position: { row: pick.row, col: pick.col }, edgeCount: pick.edgeCount });
+                        workGrid = pick.gridAfter;
+                    }
+                    const out = results.slice();
+                    this.shuffleArray(out);
+                    return out;
+                } catch (_) { return []; }
+            }
+
+            // 随机可放（兜底）：沿用原“随机可放三块”的逻辑，返回含 colors 的三块
+            computeRandomPlaceableThreeWithColors() {
+                // 使用不含 1x1 的块池
+                const attempt = (pool) => {
+                    let found = false;
+                    let tryCount = 0;
+                    const maxTries = 100;
+                    let lastRandomShapes = [];
+                    let selectedShapes = [];
+                    while (!found && tryCount < maxTries) {
+                        tryCount++;
+                        let tempGrid = this.grid.map(row => row.slice());
+                        const shapePool = pool.slice();
+                        this.shuffleArray(shapePool);
+                        selectedShapes = [];
+                        lastRandomShapes = [];
+                        for (let i = 0; i < shapePool.length && selectedShapes.length < 3; i++) {
+                            const pattern = shapePool[i];
+                            const blockIndex = selectedShapes.length;
+                            const rawPool = this.shapeColorPools[blockIndex];
+                            const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                            const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                            let cellCount = 0; for (let rr = 0; rr < pattern.length; rr++) { for (let cc = 0; cc < pattern[rr].length; cc++) { if (pattern[rr][cc]) cellCount++; } }
+                            const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && cellCount >= 2)
+                                ? this.buildTwoColorMatrix(pattern, colorPool)
+                                : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                            const maxRow = this.gridSize - pattern.length;
+                            const maxCol = this.gridSize - pattern[0].length;
+                            const positions = this.getShuffledPositions(maxRow, maxCol);
+                            let placed = false;
+                            for (const pos of positions) {
+                                let canPlace = true;
+                                for (let r = 0; r < pattern.length; r++) {
+                                    for (let c = 0; c < pattern[r].length; c++) {
+                                        if (pattern[r][c] && tempGrid[pos.row + r][pos.col + c]) { canPlace = false; break; }
+                                    }
+                                    if (!canPlace) break;
+                                }
+                                if (canPlace) {
+                                    tempGrid = this.placeShapeOnGrid(tempGrid, pattern, colors, pos.row, pos.col);
+                                    selectedShapes.push({pattern, colors});
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                            lastRandomShapes.push({ pattern, colors });
+                        }
+                        if (selectedShapes.length === 3) { found = true; }
+                    }
+                    return { found, selectedShapes, lastRandomShapes };
+                };
+                const poolNo11 = this.shapes.slice().filter(p => this.getPatternArea(p) !== 1);
+                let { found, selectedShapes, lastRandomShapes } = attempt(poolNo11);
+                const out = [];
+                for (let i = 0; i < selectedShapes.length && i < 3; i++) {
+                    out.push({ pattern: selectedShapes[i].pattern, colors: selectedShapes[i].colors });
+                }
+                while (out.length < 3) {
+                    let randomShape;
+                    if (lastRandomShapes.length > 0) randomShape = lastRandomShapes[Math.floor(Math.random() * lastRandomShapes.length)];
+                    else {
+                        const pattern = this.shapes[0];
+                        const blockIndex = out.length;
+                        const rawPool = this.shapeColorPools[blockIndex];
+                        const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                        const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                        let __cells = 0; for (let r2 = 0; r2 < pattern.length; r2++) { for (let c2 = 0; c2 < pattern[r2].length; c2++) { if (pattern[r2][c2]) __cells++; } }
+                        const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && __cells >= 2)
+                            ? this.buildTwoColorMatrix(pattern, colorPool)
+                            : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                        randomShape = { pattern, colors };
+                    }
+                    out.push({ pattern: randomShape.pattern, colors: randomShape.colors });
+                }
+                return out;
+            }
+
+            // 原始随机（含 1x1）：作为最终兜底
+            computeOriginalRandomThreeWithColors() {
+                const attempt = (pool) => {
+                    let found = false;
+                    let tryCount = 0;
+                    const maxTries = 100;
+                    let lastRandomShapes = [];
+                    let selectedShapes = [];
+                    while (!found && tryCount < maxTries) {
+                        tryCount++;
+                        let tempGrid = this.grid.map(row => row.slice());
+                        const shapePool = pool.slice();
+                        this.shuffleArray(shapePool);
+                        selectedShapes = [];
+                        lastRandomShapes = [];
+                        for (let i = 0; i < shapePool.length && selectedShapes.length < 3; i++) {
+                            const pattern = shapePool[i];
+                            const blockIndex = selectedShapes.length;
+                            const rawPool = this.shapeColorPools[blockIndex];
+                            const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                            const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                            let cellCount = 0; for (let rr = 0; rr < pattern.length; rr++) { for (let cc = 0; cc < pattern[rr].length; cc++) { if (pattern[rr][cc]) cellCount++; } }
+                            const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && cellCount >= 2)
+                                ? this.buildTwoColorMatrix(pattern, colorPool)
+                                : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                            const maxRow = this.gridSize - pattern.length;
+                            const maxCol = this.gridSize - pattern[0].length;
+                            const positions = this.getShuffledPositions(maxRow, maxCol);
+                            let placed = false;
+                            for (const pos of positions) {
+                                let canPlace = true;
+                                for (let r = 0; r < pattern.length; r++) {
+                                    for (let c = 0; c < pattern[r].length; c++) {
+                                        if (pattern[r][c] && tempGrid[pos.row + r][pos.col + c]) { canPlace = false; break; }
+                                    }
+                                    if (!canPlace) break;
+                                }
+                                if (canPlace) {
+                                    tempGrid = this.placeShapeOnGrid(tempGrid, pattern, colors, pos.row, pos.col);
+                                    selectedShapes.push({pattern, colors});
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                            lastRandomShapes.push({ pattern, colors });
+                        }
+                        if (selectedShapes.length === 3) { found = true; }
+                    }
+                    return { found, selectedShapes, lastRandomShapes };
+                };
+                const allShapes = this.shapes.slice();
+                let { found, selectedShapes, lastRandomShapes } = attempt(allShapes);
+                const out = [];
+                for (let i = 0; i < selectedShapes.length && i < 3; i++) {
+                    out.push({ pattern: selectedShapes[i].pattern, colors: selectedShapes[i].colors });
+                }
+                while (out.length < 3) {
+                    let randomShape;
+                    if (lastRandomShapes.length > 0) randomShape = lastRandomShapes[Math.floor(Math.random() * lastRandomShapes.length)];
+                    else {
+                        const pattern = this.shapes[0];
+                        const blockIndex = out.length;
+                        const rawPool = this.shapeColorPools[blockIndex];
+                        const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                        const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                        let __cells = 0; for (let r2 = 0; r2 < pattern.length; r2++) { for (let c2 = 0; c2 < pattern[r2].length; c2++) { if (pattern[r2][c2]) __cells++; } }
+                        const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && __cells >= 2)
+                            ? this.buildTwoColorMatrix(pattern, colorPool)
+                            : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                        randomShape = { pattern, colors };
+                    }
+                    out.push({ pattern: randomShape.pattern, colors: randomShape.colors });
+                }
+                return out;
+            }
+
             generateShapes() {
                 // 覆盖钩子：前置（最高优先级）
                 try {
@@ -2008,108 +2540,72 @@
                     }
                 }
                  
-                 // 新出块逻辑：块池打乱，依次取块，依次放下3个块
-                 try { console.log('出块前计时(秒):', this.getElapsedSeconds()); } catch(_) {}
-                 let found = false;
-                 let tryCount = 0;
-                 const maxTries = 100;
-                 let lastRandomShapes = [];
-                 let selectedShapes = [];
-                 let patterns = [];
-                 let colorsArr = [];
-                 while (!found && tryCount < maxTries) {
-                     tryCount++;
-                     let tempGrid = this.grid.map(row => row.slice());
-                     // 1. 块池打乱
-                     const shapePool = this.shapes.slice();
-                     this.shuffleArray(shapePool);
-                     selectedShapes = [];
-                     patterns = [];
-                     colorsArr = [];
-                     lastRandomShapes = [];
-                     for (let i = 0; i < shapePool.length && selectedShapes.length < 3; i++) {
-                         const pattern = shapePool[i];
-                         // 使用对应块的颜色池
-                         const blockIndex = selectedShapes.length; // 当前是第几个块
-                         const rawPool = this.shapeColorPools[blockIndex];
-                         const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
-                         const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
-                         // 若为单块双色策略（两色池）且允许多色，优先保证两色都出现（1+1播种），否则直接随机
-                         let cellCount = 0; for (let rr = 0; rr < pattern.length; rr++) { for (let cc = 0; cc < pattern[rr].length; cc++) { if (pattern[rr][cc]) cellCount++; } }
-                         const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && cellCount >= 2)
-                             ? this.buildTwoColorMatrix(pattern, colorPool)
-                             : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
-                         // 2. 获取所有可能起点并打乱
-                         const maxRow = this.gridSize - pattern.length;
-                         const maxCol = this.gridSize - pattern[0].length;
-                         const positions = this.getShuffledPositions(maxRow, maxCol);
-                         let placed = false;
-                         for (const pos of positions) {
-                             // 检查能否放下
-                             let canPlace = true;
-                             for (let r = 0; r < pattern.length; r++) {
-                                 for (let c = 0; c < pattern[r].length; c++) {
-                                     if (pattern[r][c] && tempGrid[pos.row + r][pos.col + c]) {
-                                         canPlace = false;
-                                         break;
-                                     }
-                                 }
-                                 if (!canPlace) break;
-                             }
-                             if (canPlace) {
-                                 // 放下
-                                 tempGrid = this.placeShapeOnGrid(tempGrid, pattern, colors, pos.row, pos.col);
-                                 selectedShapes.push({pattern, colors});
-                                 patterns.push(pattern);
-                                 colorsArr.push(colors);
-                                 placed = true;
-                                 break;
-                             }
-                         }
-                         // 记录所有尝试过的shape和配色
-                         lastRandomShapes.push({ pattern, colors });
-                     }
-                     if (selectedShapes.length === 3) {
-                         found = true;
-                     }
-                 }
-                 // 构造最终的3个块
-                 this.currentShapes = [];
-                 let idx = 0;
-                 for (; idx < selectedShapes.length && idx < 3; idx++) {
-                     this.currentShapes.push({
-                         id: this.shapeId++,
-                         pattern: selectedShapes[idx].pattern,
-                         colors: selectedShapes[idx].colors
-                     });
-                 }
-                 // 补足到3个
-                 while (this.currentShapes.length < 3) {
-                     // 随机选一个shape和配色
-                     let randomShape;
-                     if (lastRandomShapes.length > 0) {
-                         randomShape = lastRandomShapes[Math.floor(Math.random() * lastRandomShapes.length)];
-                     } else {
-                         // 兜底
-                         const pattern = this.shapes[0];
-                         const blockIndex = this.currentShapes.length; // 当前是第几个块
-                         const rawPool = this.shapeColorPools[blockIndex];
-                         const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
-                         const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
-                         // 与上方一致的规则：双色池时优先包含两色
-                         let __cells = 0; for (let r2 = 0; r2 < pattern.length; r2++) { for (let c2 = 0; c2 < pattern[r2].length; c2++) { if (pattern[r2][c2]) __cells++; } }
-                         const colors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && __cells >= 2)
-                             ? this.buildTwoColorMatrix(pattern, colorPool)
-                             : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
-                         randomShape = { pattern, colors };
-                     }
-                     this.currentShapes.push({
-                         id: this.shapeId++,
-                         pattern: randomShape.pattern,
-                         colors: randomShape.colors
-                     });
-                 }
-                 this.renderShapes();
+                // 新出块逻辑（替换）：边数出块（严格递减）+ 随机可放兜底
+                try { console.log('出块前计时(秒):', this.getElapsedSeconds()); } catch(_) {}
+                if (true) {
+                    // 兜底链：随机可放(无1x1) → 随机可放(含1x1) → 原始随机
+                    const fallback = this.computeRandomPlaceableThreeWithColors();
+                    const bestThree = this.computeBestThreeShapesIgnoringColors();
+                    if (Array.isArray(bestThree) && bestThree.length === 3) {
+                        this.currentShapes = [];
+                        // 用“相邻同色最多”的重染色策略
+                        let simGrid = this.grid.map(row => row.slice());
+                        for (let i = 0; i < 3; i++) {
+                            const pattern = bestThree[i].pattern;
+                            const pos = bestThree[i].position || { row: 0, col: 0 };
+                            // 先用当前策略生成初配色（得到颜色袋）
+                            const blockIndex = i;
+                            const rawPool = this.shapeColorPools[blockIndex];
+                            const baseColors = (this.activeColors && this.activeColors.length) ? this.activeColors : [1,2,3];
+                            const colorPool = (Array.isArray(rawPool) && rawPool.length) ? rawPool : baseColors;
+                            let cellCount = 0; for (let rr = 0; rr < pattern.length; rr++) { for (let cc = 0; cc < pattern[rr].length; cc++) { if (pattern[rr][cc]) cellCount++; } }
+                            const initialColors = (Array.isArray(colorPool) && colorPool.length === 2 && this.maxShapeColors > 1 && cellCount >= 2)
+                                ? this.buildTwoColorMatrix(pattern, colorPool)
+                                : pattern.map(row => row.map(cell => cell ? colorPool[Math.floor(Math.random() * colorPool.length)] : 0));
+                            // 基于相邻同色重分配
+                            const recolored = this.recolorPatternByAdjacency(pattern, initialColors, simGrid, pos.row, pos.col);
+                            this.currentShapes.push({ id: this.shapeId++, pattern, colors: recolored });
+                            // 将本块写入模拟盘面（不做消除），供下一块配色参考
+                            simGrid = this.placeShapeOnGrid(simGrid, pattern, recolored, pos.row, pos.col);
+                        }
+                        this.renderShapes();
+                        /*this.comboMultiplier = 1; this.updateCombo();*/
+                        return;
+                    } else if (Array.isArray(fallback) && fallback.length === 3) {
+                        // 兜底：随机可放（保持原有颜色）
+                        this.currentShapes = [];
+                        for (let i = 0; i < 3; i++) {
+                            this.currentShapes.push({ id: this.shapeId++, pattern: fallback[i].pattern, colors: fallback[i].colors });
+                        }
+                        this.renderShapes();
+                        /*this.comboMultiplier = 1; this.updateCombo();*/
+                        return;
+                    } else {
+                        // 次兜底：随机可放（含 1x1）
+                        const allow11 = this.computeRandomPlaceableThreeWithColorsAllow11();
+                        if (Array.isArray(allow11) && allow11.length === 3) {
+                            this.currentShapes = [];
+                            for (let i = 0; i < 3; i++) {
+                                this.currentShapes.push({ id: this.shapeId++, pattern: allow11[i].pattern, colors: allow11[i].colors });
+                            }
+                            this.renderShapes();
+                            /*this.comboMultiplier = 1; this.updateCombo();*/
+                            return;
+                        }
+                        // 最终兜底：原始随机（含 1x1）
+                        const ultimate = this.computeOriginalRandomThreeWithColors();
+                        if (Array.isArray(ultimate) && ultimate.length === 3) {
+                            this.currentShapes = [];
+                            for (let i = 0; i < 3; i++) {
+                                this.currentShapes.push({ id: this.shapeId++, pattern: ultimate[i].pattern, colors: ultimate[i].colors });
+                            }
+                            this.renderShapes();
+                            /*this.comboMultiplier = 1; this.updateCombo();*/
+                            return;
+                        }
+                    }
+                }
+                // 若两者都失败（极小概率），则不改变原有流程（保留空返回）
                  // 重置连击倍率
                  /*this.comboMultiplier = 1;
                  this.updateCombo();*/

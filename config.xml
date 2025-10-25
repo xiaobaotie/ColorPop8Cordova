@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget android-versionCode="2025102401" id="colorpop8.text" version="0.0.1.25" xmlns="http://www.w3.org/ns/widgets" xmlns:android="http://schemas.android.com/apk/res/android" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <feature name="CDVWebViewEngine">
+        <param name="ios-package" value="CDVWebViewEngine" />
+    </feature>
+    <feature name="LaunchScreen">
+        <param name="ios-package" value="CDVLaunchScreen" />
+    </feature>
+    <feature name="LocalStorage">
+        <param name="ios-package" value="CDVLocalStorage" />
+    </feature>
+    <feature name="Console">
+        <param name="ios-package" value="CDVLogger" />
+        <param name="onload" value="true" />
+    </feature>
+    <feature name="HandleOpenUrl">
+        <param name="ios-package" value="CDVHandleOpenURL" />
+        <param name="onload" value="true" />
+    </feature>
+    <feature name="IntentAndNavigationFilter">
+        <param name="ios-package" value="CDVIntentAndNavigationFilter" />
+        <param name="onload" value="true" />
+    </feature>
+    <feature name="GestureHandler">
+        <param name="ios-package" value="CDVGestureHandler" />
+        <param name="onload" value="true" />
+    </feature>
+    <feature name="AdMob">
+        <param name="ios-package" value="AMBPlugin" />
+    </feature>
+    <name>Color Pop 8</name>
+    <description>经典方块拼图游戏，挑战你的逻辑思维和空间想象力</description>
+    <author email="" href="">
+        Listening Studio
+    </author>
+    <content src="index.html" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+
+    <!-- Hook to apply custom splash screen theme -->
+    <hook src="hooks/after_prepare.js" type="after_prepare" />
+    
+    <icon density="hdpi" height="72" src="www/img/72x72.png" width="72" />
+    <icon density="xhdpi" height="96" src="www/img/96x96.png" width="96" />
+    <icon density="xxhdpi" height="144" src="www/img/144x144.png" width="144" />
+    <icon density="xxxhdpi" height="192" src="www/img/192x192.png" width="192" />
+    <preference name="AllowInlineMediaPlayback" value="false" />
+    <preference name="DisallowOverscroll" value="false" />
+    <preference name="EnableViewportScale" value="false" />
+    <preference name="MediaTypesRequiringUserActionForPlayback" value="none" />
+    <preference name="SuppressesIncrementalRendering" value="false" />
+    <preference name="SuppressesLongPressGesture" value="false" />
+    <preference name="Suppresses3DTouchGesture" value="false" />
+
+    <platform name="android">
+        <preference name="android-targetSdkVersion" value="35" />
+        <edit-config file="app/src/main/AndroidManifest.xml" mode="merge" target="/manifest">
+            <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+        </edit-config>
+        <!-- cordova-plugin-splashscreen preferences -->
+        <preference name="SplashMaintainAspectRatio" value="true" />
+        <preference name="SplashShowOnlyFirstTime" value="false" />
+        <preference name="AutoHideSplashScreen" value="false" />
+        <preference name="SplashScreenDelay" value="10000" /> <!-- Keep it visible for a long time -->
+        <preference name="FadeSplashScreen" value="false" />
+        <preference name="ShowSplashScreenSpinner" value="false" />
+        <preference name="BackgroundColor" value="0xff000000"/> <!-- Black background for WebView -->
+        <!-- Android 12+ splash screen API -->
+        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="@drawable/ic_cdv_splashscreen" />
+
+        <!-- Removed deprecated <splash> tag; see AndroidWindowSplashScreenAnimatedIcon above -->
+    </platform>
+</widget>
